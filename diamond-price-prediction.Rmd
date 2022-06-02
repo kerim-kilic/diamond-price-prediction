@@ -13,7 +13,7 @@ output:
 
 # Libraries
 
-The following three libraries are used in this R notebook.
+The following three libraries are used in this R markdown file.
 
 ```{r setup, message=FALSE}
 library(tidymodels)
@@ -30,59 +30,51 @@ diamonds %>% glimpse()
 ```
 
 Take a smaller sample from dataset to reduce time to train the model.
+
 ```{r}
-diamonds_sample <- diamonds %>% slice_sample(prop = 0.2)
+diamonds_sample <- diamonds %>% slice_sample(prop = 0.1)
 ```
 
 ggpairs plot of all the variables and their correlation in the dataset. Set *eval* to *TRUE* to create this plot.
 
 ```{r, out.width='100%', fig.height=7, eval=FALSE}
-ggpairs(diamonds_sample,
-        lower = list(combo = wrap("facethist", bins = 10)))
+ggpairs(diamonds_sample, lower = list(combo = wrap("facethist", bins = 10)))
 ```
 
 ggpairs plot of all the highly correlated variables in the dataset. Set *eval* to *TRUE* to create this plot.
 
 ```{r, out.width='100%', fig.height=7, eval=FALSE}
-ggpairs(diamonds_sample %>% select(carat, price:z),
+ggpairs(diamonds_sample %>% select(carat, price:z), 
         lower = list(combo = wrap("facethist", bins = 10)))
 ```
 
 Histograms with the distribution of the target variable *price*.
 
 ```{r}
-plot3 <- ggplot(diamonds_sample, aes(price)) +
+plot1 <- ggplot(diamonds_sample, aes(price)) +
   geom_histogram(bins = 20) +
   theme_minimal()
-plot4 <- ggplot(diamonds_sample, aes(price)) +
+plot2 <- ggplot(diamonds_sample, aes(price)) +
   geom_histogram(bins = 20) +
   scale_x_log10() +
   theme_minimal()
-grid.arrange(plot3,plot4,ncol=2)
+grid.arrange(plot1, plot2, ncol = 2)
 ```
 
-# Variable transformation
+# Variable transformation and splitting the data
 
-Create a variable with the logarithm of the target variable.
-
-```{r}
-diamonds <- diamonds %>%
-  mutate(log_price = log10(price))
-```
-
-
-# Data split
-
-Split between the train set and the test set.
+Setting the seed for reproducibility. Creating a variable with the logarithm of the target variable *price* and splitting the data into a training and test set.
 
 ```{r}
 set.seed(2022)
+diamonds <- diamonds %>% 
+  mutate(log_price = log10(price))
 diamonds_split <- initial_split(diamonds, prop = 0.8, strata = log_price)
 ```
 
 # Recipes
 
-Create recipe.
+Create recipe using the logarithm of the target variable *price* and remove the reguler *price* variable. Introducing a quadratic term for the *carat*. Encode all dummy predictors to one hot encoding, remove all highly correlated predictors and predictors with very low variance. And finally center and scale all the numeric predictors.
 
 ```{r}
 initial_recipe <- training(diamonds_split) %>%
@@ -98,7 +90,7 @@ initial_recipe <- training(diamonds_split) %>%
 initial_recipe
 ```
 
-Glimpse into recipe.
+Glimpse into all the variables of the recipe.
 
 ```{r}
 initial_recipe %>% prep() %>% juice() %>% glimpse()
@@ -108,20 +100,20 @@ initial_recipe %>% prep() %>% juice() %>% glimpse()
 
 ## Regression based models
 
-Show engines of regression based models:
+Show the different engines of linear regression based models:
 
 ```{r}
 show_engines("linear_reg")
 ```
 
-linear regression: lm
+Defining a linear regression model using the lm engine:
 
 ```{r}
 lm <- linear_reg(mode = "regression") %>%
   set_engine("lm")
 ```
 
-Regularized linear regression: glmnet
+Defining a generalized linear model using the glmnet engine, penalty and mixture are to be tuned when testing the model:
 
 ```{r}
 glmnet <- linear_reg(penalty = tune(), mixture = tune()) %>%
@@ -137,7 +129,7 @@ show_engines("rand_forest") %>%
   filter(mode == "regression")
 ```
 
-Random forest model with the ranger engine:
+Defining the random forest model using the ranger engine:
 
 ```{r}
 rf_ranger <- rand_forest(mode = "regression", mtry = tune(), trees = tune()) %>%
@@ -146,10 +138,10 @@ rf_ranger <- rand_forest(mode = "regression", mtry = tune(), trees = tune()) %>%
 
 ## Neural network using keras
 
-Linear regression model using a keras neural network.
+Defining the linear regression model using the Keras engine:
 
 ```{r}
-keras <- linear_reg(mode = "regression") %>%
+keras <- linear_reg(mode = "regression") %>% 
   set_engine("keras")
 ```
 
@@ -157,15 +149,21 @@ keras <- linear_reg(mode = "regression") %>%
 
 ## Metric set and folds
 
+Defining the metrics for linear regression model performance: R-Squared, Mean Absolute Error, and Root Mean Square Error.
+
 ```{r}
 metric_diamonds <- metric_set(rsq, mae, rmse)
 ```
 
+Defining the number of folds for the cross validation to 4 and keeping repeats at 1 to minimize the time to train each model.
+
 ```{r}
-folds <- vfold_cv(training(diamonds_split), v = 5, repeats = 2)
+folds <- vfold_cv(training(diamonds_split), v = 4)
 ```
 
-## Cross validating our linear regression model
+## Cross validating our linear regression model (lm)
+
+Creating the workflow for our linear regression model using the lm engine.
 
 ```{r}
 wf_lm <- workflow() %>%
@@ -173,14 +171,18 @@ wf_lm <- workflow() %>%
   add_model(lm)
 ```
 
+Testing the linear regression model using cross validation.
+
 ```{r, message=FALSE}
-fit_resamples(wf_lm, 
-              folds,
-              metrics = metric_diamonds) %>%
-  collect_metrics()
+lm_result <- fit_resamples(wf_lm, 
+                           folds,
+                           metrics = metric_diamonds) %>%
+  collect_metrics() 
+
+lm_result
 ```
 
-## Cross validating and tuning our regularized linear regression model
+## Cross validating and tuning our regularized linear regression model (glmnet)
 
 Creating the workflow using the recipe and the glmnet model.
 
@@ -205,10 +207,11 @@ glm_tune <- tune_grid(wf_glmnet,
                       metrics = metric_diamonds,
                       control = ctrl)
 ```
-Top 10 models based on hyper parameter tuning.
+
+Top 10 models based on hyper parameter tuning the *penalty* and *mixture* parameters.
 
 ```{r}
-glm_tune %>% 
+glm_result <- glm_tune %>% 
   collect_metrics() %>%
   filter(.metric == "rsq") %>%
   arrange(-mean) %>%
@@ -222,9 +225,9 @@ best_glmn <- select_best(glm_tune, metric = "rsq")
 best_glmn
 ```
 
-## Cross validating and tuning our random forest 
+## Cross validating and tuning our random forest (ranger)
 
-Creating the workflow using the recipe and the random forest model.
+Creating the workflow using the recipe and the random forest model with the ranger engine.
 
 ```{r}
 wf_rf_ranger <- workflow() %>%
@@ -232,9 +235,13 @@ wf_rf_ranger <- workflow() %>%
   add_model(rf_ranger)
 ```
 
+Setting the grid for hyper parameter tuning for the *mtry* and number of *trees*.
+
 ```{r}
 rf_grid <- expand.grid(mtry = c(1, 5, 10), trees = c(5, 10, 15))
 ```
+
+Cross validating and hyper parameter tuning the randomforest model.
 
 ```{r}
 rf_tune <- tune_grid(object = rf_ranger, 
@@ -242,10 +249,14 @@ rf_tune <- tune_grid(object = rf_ranger,
                      resamples = folds, 
                      grid = rf_grid, 
                      metrics = metric_set(rsq, rmse, mae))
-show_best(rf_tune, metric = "rsq")
+rf_result <- show_best(rf_tune, metric = "rsq")
+
+rf_result
 ```
 
-## Cross validating and tuning our neural network model
+## Cross validating and tuning our deep learning model (keras)
+
+Create a workflow for the keras model
 
 ```{r}
 wf_keras <- workflow() %>%
@@ -253,10 +264,52 @@ wf_keras <- workflow() %>%
   add_model(keras)
 ```
 
+Test the model with cross validation.
+
 ```{r, message=FALSE}
-fit_resamples(wf_keras, 
-              folds,
-              metrics = metric_diamonds) %>%
+keras_result <- fit_resamples(wf_keras, 
+                              folds,
+                              metrics = metric_diamonds) %>%
   collect_metrics()
+
+keras_result
 ```
+
+# Comparing model performance
+
+Let's compare the results of the performance of the four trained models.
+
+```{r}
+lm_result_final <- lm_result %>%
+  mutate(model_engine = c("lm")) %>%
+  filter(.metric == "rsq") %>%
+  head(1)
+
+glm_result_final <- glm_result %>%
+  mutate(model_engine = c("glm")) %>%
+  filter(.metric == "rsq") %>%
+  select(.metric:model_engine) %>%
+  head(1)
+
+rf_result_final <- rf_result %>%
+  mutate(model_engine = c("ranger")) %>%
+  filter(.metric == "rsq") %>%
+  select(.metric:model_engine) %>%
+  head(1)
+
+keras_result_final <- keras_result %>%
+  mutate(model_engine = c("keras")) %>%
+  filter(.metric == "rsq") %>%
+  head(1)
+
+final_results <- rbind(lm_result_final, glm_result_final, rf_result_final, keras_result_final) %>%
+  select(.metric, mean, n, std_err, .config, model_engine) %>%
+  mutate(mean = round(mean,3),
+         std_err = round(std_err,5)) %>%
+  arrange(-mean)
+
+final_results
+```
+
+Based on the test results from cross validation and hyper parameter tuning it turns out the `r final_results[1,6]` engine has the best performance with an R-Squared value of `r final_results[1,2]`. This is the model we will fit to the entire training data set and compare the model performance on unseen data in the test set.
 
