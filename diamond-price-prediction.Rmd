@@ -128,6 +128,21 @@ glmnet <- linear_reg(penalty = tune(), mixture = tune()) %>%
   set_engine("glmnet")
 ```
 
+## Tree based models
+
+Show engines of random forest based models:
+
+```{r}
+show_engines("rand_forest") %>%
+  filter(mode == "regression")
+```
+
+Random forest model with the ranger engine:
+
+```{r}
+rf_ranger <- rand_forest(mode = "regression", mtry = tune(), trees = tune()) %>%
+  set_engine("ranger")
+```
 
 # Testing the models
 
@@ -156,7 +171,7 @@ fit_resamples(wf_lm,
   collect_metrics()
 ```
 
-## Cross validating our regularized linear regression model
+## Cross validating and tuning our regularized linear regression model
 
 Creating the workflow using the recipe and the glmnet model.
 
@@ -196,5 +211,28 @@ Settings of the best model extracted from hyper parameter tuning.
 ```{r}
 best_glmn <- select_best(glm_tune, metric = "rsq")
 best_glmn
+```
+
+## Cross validating and tuning our random forest 
+
+Creating the workflow using the recipe and the random forest model.
+
+```{r}
+wf_rf_ranger <- workflow() %>%
+  add_recipe(initial_recipe) %>%
+  add_model(rf_ranger)
+```
+
+```{r}
+rf_grid <- expand.grid(mtry = c(1, 5, 10), trees = c(5, 10, 15))
+```
+
+```{r}
+rf_tune <- tune_grid(object = rf_ranger, 
+                     preprocessor = initial_recipe, 
+                     resamples = folds, 
+                     grid = rf_grid, 
+                     metrics = metric_set(rsq, rmse, mae))
+show_best(rf_tune, metric = "rsq")
 ```
 
