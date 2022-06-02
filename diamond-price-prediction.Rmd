@@ -1,0 +1,54 @@
+---
+title: "Diamond price prediction"
+subtitle: "Supervised Machined Learning"
+author: "Kerim Kiliç"
+output:
+  html_document:
+    df_print: paged
+---
+
+The following three libraries are used in this R notebook.
+
+```{r setup, message=FALSE}
+library(tidymodels)
+library(GGally)
+library(gridExtra)
+```
+
+Glimpse into the variables of the *diamonds* dataset.
+
+```{r}
+diamonds %>% glimpse()
+```
+
+Take a smaller sample from dataset to reduce time to train the model.
+```{r}
+diamonds_sample <- diamonds %>% slice_sample(prop = 0.2)
+```
+
+ggpairs plot of all the variables and their correlation in the dataset. Set *eval* to *TRUE* to create this plot.
+
+```{r, out.width='100%', fig.height=7, eval=FALSE}
+ggpairs(diamonds_sample,
+        lower = list(combo = wrap("facethist", bins = 10)))
+```
+
+ggpairs plot of all the highly correlated variables in the dataset. Set *eval* to *TRUE* to create this plot.
+
+```{r, out.width='100%', fig.height=7, eval=FALSE}
+ggpairs(diamonds_sample %>% select(carat, price:z),
+        lower = list(combo = wrap("facethist", bins = 10)))
+```
+
+Histograms with the distribution of the target variable *price*.
+
+```{r}
+plot3 <- ggplot(diamonds_sample, aes(price)) +
+  geom_histogram(bins = 20) +
+  theme_minimal()
+plot4 <- ggplot(diamonds_sample, aes(price)) +
+  geom_histogram(bins = 20) +
+  scale_x_log10() +
+  theme_minimal()
+grid.arrange(plot3,plot4,ncol=2)
+```
