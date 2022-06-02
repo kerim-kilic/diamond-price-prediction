@@ -5,6 +5,10 @@ subtitle: Supervised Machined Learning
 output:
   html_document:
     df_print: paged
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    toc_float: true
 ---
 
 # Libraries
@@ -117,6 +121,14 @@ lm <- linear_reg(mode = "regression") %>%
   set_engine("lm")
 ```
 
+Regularized linear regression: glmnet
+
+```{r}
+glmnet <- linear_reg(penalty = tune(), mixture = tune()) %>%
+  set_engine("glmnet")
+```
+
+
 # Testing the models
 
 ## Metric set and folds
@@ -129,7 +141,7 @@ metric_diamonds <- metric_set(rsq, mae, rmse)
 folds <- vfold_cv(training(diamonds_split), v = 5, repeats = 2)
 ```
 
-## Cross validating our linear model
+## Cross validating our linear regression model
 
 ```{r}
 wf_lm <- workflow() %>%
@@ -142,5 +154,47 @@ fit_resamples(wf_lm,
               folds,
               metrics = metric_diamonds) %>%
   collect_metrics()
+```
+
+## Cross validating our regularized linear regression model
+
+Creating the workflow using the recipe and the glmnet model.
+
+```{r}
+wf_glmnet <- workflow() %>%
+  add_recipe(initial_recipe) %>%
+  add_model(glmnet)
+```
+
+Hyperparameter tuning our regularized general linear regression model.
+
+```{r, message=FALSE}
+glmn_set <- parameters(penalty(range = c(-5,1), trans = log10_trans()), mixture())
+
+glmn_grid <- grid_regular(glmn_set, levels = c(7, 5))
+
+ctrl <- control_grid(save_pred = TRUE, verbose = TRUE)
+
+glm_tune <- tune_grid(wf_glmnet,
+                      resamples = folds,
+                      grid = glmn_grid,
+                      metrics = metric_diamonds,
+                      control = ctrl)
+```
+Top 10 models based on hyper parameter tuning.
+
+```{r}
+glm_tune %>% 
+  collect_metrics() %>%
+  filter(.metric == "rsq") %>%
+  arrange(-mean) %>%
+  head(10)
+```
+
+Settings of the best model extracted from hyper parameter tuning.
+
+```{r}
+best_glmn <- select_best(glm_tune, metric = "rsq")
+best_glmn
 ```
 
