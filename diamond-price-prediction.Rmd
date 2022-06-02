@@ -311,5 +311,60 @@ final_results <- rbind(lm_result_final, glmn_result_final, rf_result_final, kera
 final_results
 ```
 
-Based on the test results from cross validation and hyper parameter tuning it turns out the `r final_results[1,6]` engine has the best performance with an R-Squared value of `r final_results[1,2]`. This is the model we will fit to the entire training data set and compare the model performance on unseen data in the test set.
+Based on the test results from cross validation and hyper parameter tuning it turns out the `r final_results$model_engine[1]` engine has the best performance with an R-Squared value of `r round(final_results$mean[1],3)`. This is the model we will fit to the entire training data set and compare the model performance on unseen data in the test set.
 
+# Fitting the model to the train set
+
+As determined earlier the random forest model with the ranger engine has the best performance so for the final model we fit the best model to the entire train set.
+
+```{r}
+best_ranger_model <- select_best(rf_tune, "rsq")
+best_rf_ranger <- select_best(rf_tune, metric = "rsq")
+final_workflow <- wf_rf_ranger %>%
+  finalize_workflow(best_rf_ranger) %>%
+  fit(training(diamonds_split))
+```
+
+## Predicting the train set
+
+We predict based on the train set:
+
+```{r}
+predict_training <- final_workflow %>%
+  predict(training(diamonds_split)) %>%
+  bind_cols(training(diamonds_split))
+
+predict_training <- predict_training %>%
+  metric_diamonds(truth = log_price, estimate = .pred) %>%
+  mutate(.estimate = round(.estimate,3))
+
+predict_training
+```
+
+The R-Squared is equal to `r round(predict_training$.estimate[1],3)`.
+
+## Predicting the test set
+
+Now we can predict using the data of the test set to check if there is overfitting in the model:
+
+```{r}
+predict_testing <- final_workflow %>%
+  predict(testing(diamonds_split)) %>%
+  bind_cols(testing(diamonds_split))
+
+predict_testing1 <- predict_testing %>%
+  metric_diamonds(truth = log_price, estimate = .pred)
+
+predict_testing1 %>%
+  mutate(.estimate = round(.estimate,3))
+```
+
+The R-Squared is equal to `r round(predict_testing1$.estimate[1],3)`. The R-Squared value is very similar to the R-squared value of the predictions on the training set, therefore we can conclude that there is no overfitting issue. The following plot shows the actual values and the predicted values as a graphical indication of the model performance of the random forest model using the ranger engine.
+
+```{r}
+predict_testing %>%
+  ggplot(aes(log_price, .pred)) +
+  geom_point() +
+  theme_minimal() +
+  geom_abline(slope = 1, intercept = 0, color = "red")
+```
