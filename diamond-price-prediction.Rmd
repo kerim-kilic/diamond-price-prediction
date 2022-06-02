@@ -285,8 +285,8 @@ lm_result_final <- lm_result %>%
   filter(.metric == "rsq") %>%
   head(1)
 
-glm_result_final <- glm_result %>%
-  mutate(model_engine = c("glm")) %>%
+glmn_result_final <- glm_result %>%
+  mutate(model_engine = c("glmnet")) %>%
   filter(.metric == "rsq") %>%
   select(.metric:model_engine) %>%
   head(1)
@@ -302,7 +302,7 @@ keras_result_final <- keras_result %>%
   filter(.metric == "rsq") %>%
   head(1)
 
-final_results <- rbind(lm_result_final, glm_result_final, rf_result_final, keras_result_final) %>%
+final_results <- rbind(lm_result_final, glmn_result_final, rf_result_final, keras_result_final) %>%
   select(.metric, mean, n, std_err, .config, model_engine) %>%
   mutate(mean = round(mean,3),
          std_err = round(std_err,5)) %>%
