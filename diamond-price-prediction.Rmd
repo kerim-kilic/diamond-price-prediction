@@ -144,6 +144,15 @@ rf_ranger <- rand_forest(mode = "regression", mtry = tune(), trees = tune()) %>%
   set_engine("ranger")
 ```
 
+## Neural network using keras
+
+Linear regression model using a keras neural network.
+
+```{r}
+keras <- linear_reg(mode = "regression") %>%
+  set_engine("keras")
+```
+
 # Testing the models
 
 ## Metric set and folds
@@ -234,5 +243,20 @@ rf_tune <- tune_grid(object = rf_ranger,
                      grid = rf_grid, 
                      metrics = metric_set(rsq, rmse, mae))
 show_best(rf_tune, metric = "rsq")
+```
+
+## Cross validating and tuning our neural network model
+
+```{r}
+wf_keras <- workflow() %>%
+  add_recipe(initial_recipe) %>%
+  add_model(keras)
+```
+
+```{r, message=FALSE}
+fit_resamples(wf_keras, 
+              folds,
+              metrics = metric_diamonds) %>%
+  collect_metrics()
 ```
 
