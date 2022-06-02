@@ -1,11 +1,13 @@
 ---
 title: "Diamond price prediction"
-subtitle: "Supervised Machined Learning"
 author: "Kerim Kiliç"
+subtitle: Supervised Machined Learning
 output:
   html_document:
     df_print: paged
 ---
+
+# Libraries
 
 The following three libraries are used in this R notebook.
 
@@ -14,6 +16,8 @@ library(tidymodels)
 library(GGally)
 library(gridExtra)
 ```
+
+# Dataset descriptive analytics
 
 Glimpse into the variables of the *diamonds* dataset.
 
@@ -52,3 +56,91 @@ plot4 <- ggplot(diamonds_sample, aes(price)) +
   theme_minimal()
 grid.arrange(plot3,plot4,ncol=2)
 ```
+
+# Variable transformation
+
+Create a variable with the logarithm of the target variable.
+
+```{r}
+diamonds <- diamonds %>%
+  mutate(log_price = log10(price))
+```
+
+
+# Data split
+
+Split between the train set and the test set.
+
+```{r}
+set.seed(2022)
+diamonds_split <- initial_split(diamonds, prop = 0.8, strata = log_price)
+```
+
+# Recipes
+
+Create recipe.
+
+```{r}
+initial_recipe <- training(diamonds_split) %>%
+  recipe(log_price ~ .) %>%
+  step_rm(price) %>%
+  step_poly(carat, degree = 2) %>%
+  step_dummy(all_nominal(), one_hot = TRUE) %>%
+  step_corr(all_predictors()) %>%
+  step_nzv(all_predictors()) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors())
+
+initial_recipe
+```
+
+Glimpse into recipe.
+
+```{r}
+initial_recipe %>% prep() %>% juice() %>% glimpse()
+```
+
+# Creating models
+
+## Regression based models
+
+Show engines of regression based models:
+
+```{r}
+show_engines("linear_reg")
+```
+
+linear regression: lm
+
+```{r}
+lm <- linear_reg(mode = "regression") %>%
+  set_engine("lm")
+```
+
+# Testing the models
+
+## Metric set and folds
+
+```{r}
+metric_diamonds <- metric_set(rsq, mae, rmse)
+```
+
+```{r}
+folds <- vfold_cv(training(diamonds_split), v = 5, repeats = 2)
+```
+
+## Cross validating our linear model
+
+```{r}
+wf_lm <- workflow() %>%
+  add_recipe(initial_recipe) %>%
+  add_model(lm)
+```
+
+```{r, message=FALSE}
+fit_resamples(wf_lm, 
+              folds,
+              metrics = metric_diamonds) %>%
+  collect_metrics()
+```
+
